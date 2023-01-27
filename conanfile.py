@@ -46,7 +46,7 @@ class SkyboltConan(ConanFile):
         recipes_path = os.path.join(currentDir, "Conan/Recipes", name)
         if (subfolder):
             recipes_path = os.path.join(recipes_path, subfolder)
-            
+
         self.run(("conan export . %s/%s@user/stable" % (name, version)), cwd=recipes_path)
         self.requires(("%s/%s@user/stable" % (name, version)))
 
@@ -70,7 +70,7 @@ class SkyboltConan(ConanFile):
 
         if self.options.enable_python:
             self.requires("pybind11/2.9.1@_/_")
-            
+
         if self.options.enable_sprocket:
             self.requires("expat/2.4.8@_/_") # Indirect dependency. Specified to resolve version clash between wayland (used by Qt) and fontconfig (used by OSG)
             self.requires("openssl/1.1.1s@_/_") # Indirect dependency. Specified to resolve version clash between qt/5.15.3 and libcurl/7.83.1
@@ -81,6 +81,12 @@ class SkyboltConan(ConanFile):
 
     def build(self):
         cmake = CMake(self)
+
+        # Prevents conan package finding spam
+        cmake.definitions["CONAN_CMAKE_SILENT_OUTPUT"] = "true"
+
+        if self.settings.build_type == "Release":
+            cmake.build_type = "RelWithDebInfo"
 
         cmake.definitions["Boost_STATIC_LIBS"] = str(not self.options["boost"].shared)
         cmake.definitions["OSG_STATIC_LIBS"] = str(not self.options["openscenegraph-mr"].shared)
@@ -97,7 +103,7 @@ class SkyboltConan(ConanFile):
         if self.options.enable_python:
             cmake.definitions["BUILD_PYTHON_BINDINGS"] = "true"
             cmake.definitions["BUILD_PYTHON_COMPONENT_PLUGIN"] = "true"
-            
+
         if self.options.enable_sprocket:
             cmake.definitions["BUILD_SEQUENCE_EDITOR_PLUGIN"] = "true"
             cmake.definitions["BUILD_SPROCKET"] = "true"
@@ -105,16 +111,16 @@ class SkyboltConan(ConanFile):
         cmake.definitions["CMAKE_TOOLCHAIN_FILE"] = "conan_paths.cmake"
         cmake.configure()
         cmake.build()
-		
+
     def package(self):
         cmake = CMake(self)
         cmake.install()
-		
+
     def package_info(self):
         self.cpp_info.includedirs = ["include"]
         self.cpp_info.names["cmake_find_package"] = "Skybolt"
         self.cpp_info.libs = ["AircraftHud", "MapAttributesConverter", "SkyboltCommon", "SkyboltEngine", "SkyboltSim", "SkyboltVis"]
-		
+
         if self.options.enable_fft_ocean and not self.options.shared_plugins:
             self.cpp_info.libs.append("FftOcean")
         if self.options.enable_sprocket == True:
