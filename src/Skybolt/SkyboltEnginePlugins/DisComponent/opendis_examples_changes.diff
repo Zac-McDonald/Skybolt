@@ -1,0 +1,159 @@
+diff --git a/examples/EntityStatePduProcessor.cpp b/examples/EntityStatePduProcessor.cpp
+index f840fc0..4e4c647 100644
+--- a/examples/EntityStatePduProcessor.cpp
++++ b/examples/EntityStatePduProcessor.cpp
+@@ -10,7 +10,7 @@ void EntityStatePduProcessor::Process(const DIS::Pdu& packet)
+    if( espdu.getTimestamp() % 10 )
+    {
+       const DIS::Vector3Double& position = espdu.getEntityLocation();
+-      std::cout << "x:" << position.getX()
++      std::cout << "x:"   << position.getX()
+                 << "\ty:" << position.getY()
+                 << "\tz:" << position.getZ()
+                 << std::endl;
+diff --git a/examples/Utils.cpp b/examples/Utils.cpp
+index bf87eb3..aa9cb05 100644
+--- a/examples/Utils.cpp
++++ b/examples/Utils.cpp
+@@ -54,18 +54,20 @@ void HeloFlightDynamics::operator ()(double dt)
+    orientation.setPsi( 0.f);
+    orientation.setTheta( 0.f);
+    orientation.setPhi( 30.f );
+-   //if( vx < 0.f )
+-   //{
+-   //   orientation.setPhi( M_PI - acos(-vx) );
+-   //}
+-   //else
+-   //{
+-   //   orientation.setPhi( acos(vx) );
+-   //}
++
++   if( vx < 0.f )
++   {
++      orientation.setPhi( M_PI - acos(-sin_rot) );
++   }
++   else
++   {
++      orientation.setPhi( acos(sin_rot) );
++   }
++
+ }
+ 
+ 
+-TankDynamics::TankDynamics(double tv, double ev)
++TankDynamics::TankDynamics(double tv, double ev, const Point3d& ip)
+    : _angle_primary_turret(0.f)
+    , _velocity_turret(tv)
+    , _angle_primary_gun(0.f)
+@@ -74,11 +76,17 @@ TankDynamics::TankDynamics(double tv, double ev)
+    , _secondary_gun_range(Example::DegreesToRadians(270.f), Example::DegreesToRadians(360.f) )
+    , _control_elevation( 0. )
+    , _control_elevation_velocity(ev)
++   , _ip(ip)
+ {
+ }
+ 
+ void TankDynamics::Update(double dt)
+ {
++   // set the position
++   position.setX( _ip.x );
++   position.setY( _ip.y );
++   position.setZ( _ip.z );
++
+    _angle_primary_turret += _velocity_turret * (float)dt;
+ 
+    // update the gun elevation based on the sin function.
+diff --git a/examples/Utils.h b/examples/Utils.h
+index 2f98d62..88d5e4d 100644
+--- a/examples/Utils.h
++++ b/examples/Utils.h
+@@ -84,7 +84,7 @@ namespace Example
+    class TankDynamics
+    {
+    public:
+-      TankDynamics(double turret_velocity, double elevation_controller_rate);
++      TankDynamics(double turret_velocity, double elevation_controller_rate, const Point3d& ip);
+ 
+       void Update(double dt);
+ 
+@@ -101,9 +101,11 @@ namespace Example
+       NormalizedRange _primary_gun_range;  ///< stores the limited movement values
+       NormalizedRange _secondary_gun_range;  ///< stores the limited movement values
+ 
++      DIS::Vector3Double position;
+    private:
+       float _control_elevation;
+       double _control_elevation_velocity;
++      Point3d _ip;
+    };
+ 
+    /// converts degrees to radians
+@@ -146,4 +148,3 @@ namespace Example
+       return t;
+    }
+ }
+-
+diff --git a/examples/main.cpp b/examples/main.cpp
+index 6fdbcfd..3de4cb4 100644
+--- a/examples/main.cpp
++++ b/examples/main.cpp
+@@ -269,6 +269,7 @@ void UpdateHelo(DIS::EntityStatePdu& helo, Example::HeloFlightDynamics& dynamics
+ void UpdateTank(DIS::EntityStatePdu& tank, Example::TankDynamics& dynamics, double dt, unsigned int frame_stamp)
+ {
+    dynamics.Update( dt );
++   tank.setEntityLocation( dynamics.position );
+ 
+    // articulation
+    std::vector<DIS::ArticulationParameter> &params = tank.getArticulationParameters();
+@@ -294,10 +295,14 @@ int main(int argc, char* argv[])
+ {
+    unsigned int port(62040);
+    std::string ip("224.0.0.1");
++   unsigned int timestep = 1000;
+    if( argc > 2 )
+    {
+       port = Example::ToType<unsigned int>( argv[1] );
+       ip = argv[2];
++	  if (argc > 3) {
++		  timestep = Example::ToType<unsigned int>( argv[3] );
++	  }
+    }
+ 
+    /// the basic pieces for sending data
+@@ -314,17 +319,20 @@ int main(int argc, char* argv[])
+ 
+    // -- initialize the flight controllers -- //
+    // the holding location of the friendly aircraft
++   Example::Point3d exampleOrigin = { -2.29895e+06, -3.6356e+06, 4.70034e+06 };
+    Example::Point3d IP;
+-   IP.x = 50.f;
+-   IP.y = 50.f; // altitude?
+-   IP.z = 50.f;
++   IP = exampleOrigin;
++   IP.x += 50.f;
++   IP.y += 50.f; // altitude?
++   IP.z += 50.f;
+    Example::HeloFlightDynamics helo_flight_dynamics_0(Example::DegreesToRadians(20.f),20., IP, 0.);
+-   IP.x = 75.f;
+-   IP.y = 75.f; // altitude?
+-   IP.z = 75.f;
++   IP = exampleOrigin;
++   IP.x += 75.f;
++   IP.y += 75.f; // altitude?
++   IP.z += 75.f;
+    Example::HeloFlightDynamics helo_flight_dynamics_1(Example::DegreesToRadians(40.f),40., IP, 0.);
+ 
+-   Example::TankDynamics tank_dynamics( Example::DegreesToRadians(10.f), Example::DegreesToRadians(20.f) );
++   Example::TankDynamics tank_dynamics( Example::DegreesToRadians(10.f), Example::DegreesToRadians(20.f), exampleOrigin );
+    // Initialize the timer
+    Example::Timer timer;
+    timer.Update();
+@@ -386,7 +394,7 @@ int main(int argc, char* argv[])
+       // increase for next frame
+       frame_stamp++;
+ 
+-      Example::sleep( 10000 );
++      Example::sleep( timestep );
+    }
+ 
+    multicast.Disconnect();

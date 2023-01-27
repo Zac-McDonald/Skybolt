@@ -24,3 +24,8 @@ OPTION(BUILD_PYTHON_COMPONENT_PLUGIN "Build Python Component Plugin")
 if (BUILD_PYTHON_COMPONENT_PLUGIN)
 	add_subdirectory(PythonComponent)
 endif()
+
+OPTION(BUILD_DIS_COMPONENT_PLUGIN "Build DIS Component Plugin")
+if (BUILD_DIS_COMPONENT_PLUGIN)
+	add_subdirectory(DisComponent)
+endif()
